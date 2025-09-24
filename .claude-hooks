@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Claude Code Safety Hook
+# This script validates commands before execution
+
+DANGEROUS_PATTERNS=(
+    "rm -rf /"
+    "rm -rf /*"
+    "rm -rf ~"
+    "sudo rm -rf"
+    "mkfs\."
+    "dd if=/dev/zero"
+    "chmod -R 000"
+    ":\(\)\{ :\|:\& \}\;:"
+    "find / -delete"
+    "shred -vfz"
+    "> /dev/sd"
+    "curl.*\| bash"
+    "wget.*\| sh"
+    "sudo passwd"
+    "usermod.*sudo"
+)
+
+check_command_safety() {
+    local cmd="$1"
+    
+    for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+        if [[ "$cmd" =~ $pattern ]]; then
+            echo "⚠️  BLOCKED: Potentially dangerous command detected"
+            echo "Command: $cmd"
+            echo "Pattern: $pattern"
+            echo "Refer to CLAUDE_SAFETY_RULES.md for guidelines"
+            return 1
+        fi
+    done
+    
+    # Check for operations outside project directory
+    if [[ "$cmd" =~ (rm|mv|cp).*\.\./\.\. ]] || [[ "$cmd" =~ /usr/|/etc/|/var/|/sys/ ]]; then
+        echo "⚠️  WARNING: Command affects files outside project directory"
+        echo "Command: $cmd"
+        echo "Continue? (y/N)"
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+# Export function for use in other scripts
+export -f check_command_safety
